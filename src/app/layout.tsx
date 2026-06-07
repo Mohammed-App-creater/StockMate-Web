@@ -5,6 +5,7 @@ import Providers from './providers';
 
 const inter = Inter({
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-inter',
 });
 
@@ -19,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`}>
-      <body className="min-h-full antialiased">
+    <html lang="en" className={inter.variable}>
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>

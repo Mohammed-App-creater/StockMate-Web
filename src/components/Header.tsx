@@ -1,25 +1,48 @@
 'use client';
 
-import { LogOut } from 'lucide-react';
-import { useAuthStore } from '@/store/auth';
+import React from 'react';
+import { Menu, Bell, Search } from '@/components/ui';
 
-interface HeaderProps {
+interface TopbarProps {
   title: string;
+  sub?: string;
+  onToggle: () => void;
+  actions?: React.ReactNode;
 }
 
-export default function Header({ title }: HeaderProps) {
-  const logout = useAuthStore((s) => s.logout);
-
+export default function Topbar({ title, sub, onToggle, actions }: TopbarProps) {
   return (
-    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
-      <h1 className="text-xl font-semibold text-gray-900">{title}</h1>
-      <button
-        onClick={logout}
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-red-600"
-      >
-        <LogOut size={18} />
-        Logout
+    <header className="topbar">
+      <button className="iconbtn iconbtn--ghost" onClick={onToggle} title="Toggle sidebar">
+        <Menu size={20} />
       </button>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="topbar__title">{title}</div>
+        {sub && <div className="topbar__sub">{sub}</div>}
+      </div>
+      <div className="row" style={{ gap: 10 }}>
+        {actions}
+        <button className="iconbtn bell-dot" title="Notifications">
+          <Bell size={19} />
+        </button>
+        <div className="row" style={{ gap: 10, paddingLeft: 6 }}>
+          <div className="avatar">AT</div>
+          <div style={{ lineHeight: 1.25 }} className="hide-sm">
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>Abenezer T.</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Senior Accountant</div>
+          </div>
+        </div>
+      </div>
     </header>
+  );
+}
+
+/** Quick-search field used as a topbar action on the dashboard. */
+export function TopbarSearch() {
+  return (
+    <div className="search hide-sm" style={{ width: 280, height: 38 }}>
+      <Search size={17} color="var(--muted)" />
+      <input placeholder="Quick search…" />
+    </div>
   );
 }

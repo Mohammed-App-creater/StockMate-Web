@@ -1,126 +1,171 @@
 'use client';
 
-import { DollarSign, TrendingDown, TrendingUp, Receipt, AlertTriangle } from 'lucide-react';
-import StatsCard from '@/components/StatsCard';
 import { useDailySummary } from '@/hooks/useAnalytics';
-import { formatMoney } from '@/lib/format';
+import {
+  Birr,
+  Stat,
+  MarginCell,
+  SkeletonStats,
+  SkeletonTable,
+  Coins,
+  Wallet,
+  TrendingUp,
+  ArrowRightLeft,
+  AlertTriangle,
+  Calendar,
+} from '@/components/ui';
 
-function SkeletonCards() {
-  return (
-    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div
-          key={i}
-          className="h-24 animate-pulse rounded-xl bg-white shadow-sm ring-1 ring-gray-100"
-        />
-      ))}
-    </div>
-  );
-}
+const initial = (name: string) => name.trim().charAt(0).toUpperCase() || '#';
 
 export default function DashboardPage() {
   const { data, isLoading, isError } = useDailySummary();
+  const today = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
-  if (isLoading) {
+  if (isError) {
     return (
-      <div className="space-y-6">
-        <SkeletonCards />
-        <div className="h-64 animate-pulse rounded-xl bg-white shadow-sm ring-1 ring-gray-100" />
+      <div className="content__inner">
+        <div className="card" style={{ padding: 24, color: 'var(--danger)' }}>
+          Failed to load dashboard data. Please try again later.
+        </div>
       </div>
     );
   }
 
-  if (isError || !data) {
-    return (
-      <div className="rounded-xl bg-red-50 p-6 text-red-700">
-        Failed to load dashboard data. Please try again later.
-      </div>
-    );
-  }
-
-  const netProfit = Number(data.net_profit);
+  const lowStock = data?.low_stock_products ?? [];
+  const top = data?.top_products ?? [];
+  const netProfit = Number(data?.net_profit ?? 0);
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <StatsCard
-          title="Revenue"
-          value={formatMoney(data.total_revenue)}
-          icon={<DollarSign size={22} />}
-          color="blue"
-        />
-        <StatsCard
-          title="Cost"
-          value={formatMoney(data.total_cost)}
-          icon={<TrendingDown size={22} />}
-          color="amber"
-        />
-        <StatsCard
-          title="Net Profit"
-          value={formatMoney(data.net_profit)}
-          icon={<TrendingUp size={22} />}
-          color={netProfit >= 0 ? 'green' : 'red'}
-        />
-        <StatsCard
-          title="Transactions"
-          value={data.total_transactions}
-          icon={<Receipt size={22} />}
-          color="blue"
-        />
-      </div>
+    <div className="content__inner">
+      {isLoading || !data ? (
+        <SkeletonStats n={4} />
+      ) : (
+        <div className="stats">
+          <Stat label="Total Revenue" value={data.total_revenue} tint="t-blue" icon={<Coins size={19} />} />
+          <Stat label="Total Cost" value={data.total_cost} tint="t-slate" icon={<Wallet size={19} />} />
+          <Stat
+            label="Net Profit"
+            value={data.net_profit}
+            tint="t-green"
+            icon={<TrendingUp size={19} />}
+            valueColor={netProfit >= 0 ? 'var(--success)' : 'var(--danger)'}
+          />
+          <Stat
+            label="Transactions"
+            value={data.total_transactions}
+            money={false}
+            tint="t-amber"
+            icon={<ArrowRightLeft size={19} />}
+          />
+        </div>
+      )}
 
-      {/* Top products */}
-      <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Top Products</h2>
-        {data.top_products.length === 0 ? (
-          <p className="text-sm text-gray-500">No sales recorded yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+      <div className="grid-2 section-gap">
+        {/* Top products */}
+        <div className="card">
+          <div className="card__head">
+            <div>
+              <div className="card__title">Top Products Today</div>
+              <div className="card__sub">Best sellers ranked by revenue</div>
+            </div>
+            <span className="badge badge--slate">
+              <Calendar size={13} />
+              &nbsp;{today}
+            </span>
+          </div>
+          {isLoading || !data ? (
+            <SkeletonTable rows={5} cols={4} />
+          ) : top.length === 0 ? (
+            <div style={{ padding: 24, color: 'var(--muted)', fontSize: 13.5 }}>
+              No sales recorded yet today.
+            </div>
+          ) : (
+            <table className="tbl">
               <thead>
-                <tr className="border-b border-gray-100 text-left text-gray-500">
-                  <th className="pb-2 font-medium">Product</th>
-                  <th className="pb-2 font-medium">Sold</th>
-                  <th className="pb-2 font-medium">Revenue</th>
-                  <th className="pb-2 font-medium">Margin</th>
+                <tr>
+                  <th>Product</th>
+                  <th className="num">Units Sold</th>
+                  <th className="num">Revenue</th>
+                  <th className="num">Margin</th>
                 </tr>
               </thead>
               <tbody>
-                {data.top_products.map((p) => (
-                  <tr key={p.product_id} className="border-b border-gray-50 last:border-0">
-                    <td className="py-2 font-medium text-gray-900">{p.product_name}</td>
-                    <td className="py-2 text-gray-600">{p.total_sold}</td>
-                    <td className="py-2 text-gray-600">{formatMoney(p.revenue)}</td>
-                    <td className="py-2 text-gray-600">{p.profit_margin_percent}%</td>
+                {top.map((p) => (
+                  <tr key={p.product_id}>
+                    <td>
+                      <div className="prod-cell">
+                        <span className="prod-thumb">{initial(p.product_name)}</span>
+                        <div className="cell-strong">{p.product_name}</div>
+                      </div>
+                    </td>
+                    <td className="num tnum cell-strong">{p.total_sold}</td>
+                    <td className="num">
+                      <Birr v={p.revenue} cls="cell-strong" />
+                    </td>
+                    <td className="num">
+                      <MarginCell pct={Math.round(Number(p.profit_margin_percent))} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-      </div>
-
-      {/* Low stock alert */}
-      <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-        <div className="mb-4 flex items-center gap-2">
-          <AlertTriangle size={18} className="text-red-500" />
-          <h2 className="text-lg font-semibold text-gray-900">Low Stock Alert</h2>
+          )}
         </div>
-        {data.low_stock_products.length === 0 ? (
-          <p className="text-sm text-gray-500">All products are well stocked.</p>
-        ) : (
-          <ul className="space-y-2">
-            {data.low_stock_products.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center justify-between rounded-lg bg-red-50 px-4 py-2"
-              >
-                <span className="font-medium text-gray-900">{p.name}</span>
-                <span className="font-semibold text-red-600">{p.current_stock} left</span>
-              </li>
-            ))}
-          </ul>
-        )}
+
+        {/* Low stock alert */}
+        <div className="card" style={{ alignSelf: 'start' }}>
+          <div className="card__head">
+            <div>
+              <div className="card__title">Low Stock Alert</div>
+              <div className="card__sub">Below 10 units — reorder soon</div>
+            </div>
+            <span className="badge badge--red">
+              <AlertTriangle size={13} />
+              &nbsp;{lowStock.length}
+            </span>
+          </div>
+          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 11 }}>
+            {isLoading || !data ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="alert-card"
+                  style={{ background: '#F8FAFC', borderColor: 'var(--border)' }}
+                >
+                  <div className="sk sk-circ" style={{ width: 38, height: 38 }} />
+                  <div style={{ flex: 1 }}>
+                    <div className="sk sk-line" style={{ width: '60%' }} />
+                    <div className="sk sk-line" style={{ width: '35%', marginTop: 7 }} />
+                  </div>
+                </div>
+              ))
+            ) : lowStock.length === 0 ? (
+              <div style={{ padding: 8, color: 'var(--muted)', fontSize: 13.5 }}>
+                All products are well stocked.
+              </div>
+            ) : (
+              lowStock.map((p) => (
+                <div className="alert-card" key={p.id}>
+                  <span className="alert-card__ico">
+                    <AlertTriangle size={19} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="alert-card__name">{p.name}</div>
+                    <div className="alert-card__meta">
+                      Only {p.current_stock} {p.unit}
+                      {p.current_stock !== 1 ? 's' : ''} left · {p.category}
+                    </div>
+                  </div>
+                  <button className="btn btn--ghost btn--sm">Reorder</button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

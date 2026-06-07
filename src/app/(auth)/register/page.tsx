@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { Field, Package, User, Lock } from '@/components/ui';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -15,7 +15,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -38,79 +38,113 @@ export default function RegisterPage() {
       router.push('/login?registered=1');
     } catch {
       setError('Registration failed. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
 
-  const inputClass =
-    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-xl bg-white p-8 shadow-sm ring-1 ring-gray-100">
-        <h1 className="mb-1 text-center text-2xl font-bold text-blue-600">StockMate</h1>
-        <p className="mb-6 text-center text-sm text-gray-500">Create your account</p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Username</label>
-            <input
-              className={inputClass}
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
+    <div className="login">
+      <div className="login__card">
+        <div className="login__brand">
+          <span className="login__logo">
+            <Package size={28} color="#fff" />
+          </span>
+          <div style={{ textAlign: 'center' }}>
+            <div className="login__title">
+              Stock<b>Mate</b>
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Full Name</label>
+          <div className="login__sub">Create your workspace account</div>
+        </div>
+
+        <form className="login__panel" onSubmit={submit}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.3px' }}>
+            Get started
+          </h2>
+          <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 4, marginBottom: 22 }}>
+            Register to start managing inventory and books.
+          </p>
+
+          <Field label="Username">
+            <div className="input-wrap">
+              <span className="input-wrap__ico">
+                <User size={17} />
+              </span>
+              <input
+                className="input input--icon"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Choose a username"
+                autoComplete="username"
+                required
+              />
+            </div>
+          </Field>
+
+          <Field label="Full Name">
             <input
-              className={inputClass}
+              className="input"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
+              placeholder="Your full name"
               required
             />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Password</label>
-            <input
-              type="password"
-              className={inputClass}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Confirm Password
-            </label>
-            <input
-              type="password"
-              className={inputClass}
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              required
-            />
-          </div>
+          </Field>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          <Field label="Password">
+            <div className="input-wrap">
+              <span className="input-wrap__ico">
+                <Lock size={17} />
+              </span>
+              <input
+                className="input input--icon"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Create a password"
+                autoComplete="new-password"
+                required
+              />
+            </div>
+          </Field>
+
+          <Field label="Confirm Password">
+            <div className="input-wrap">
+              <span className="input-wrap__ico">
+                <Lock size={17} />
+              </span>
+              <input
+                className="input input--icon"
+                type="password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="Re-enter your password"
+                autoComplete="new-password"
+                required
+              />
+            </div>
+          </Field>
+
+          {error && (
+            <p style={{ color: 'var(--danger)', fontSize: 13, margin: '4px 0 14px' }}>{error}</p>
+          )}
 
           <button
+            className="btn btn--primary btn--block"
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            style={{ height: 44, marginTop: 6, opacity: loading ? 0.85 : 1 }}
           >
-            {loading ? 'Creating account...' : 'Register'}
+            {loading ? 'Creating account…' : 'Create Account'}
           </button>
+
+          <div className="login__hl">or</div>
+          <a className="btn btn--ghost btn--block" href="/login">
+            Sign in instead
+          </a>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-500">
-          Already have an account?{' '}
-          <Link href="/login" className="font-medium text-blue-600 hover:underline">
-            Sign in
-          </Link>
-        </p>
+        <div className="login__foot">Protected workspace · Addis Ababa</div>
       </div>
     </div>
   );

@@ -1,117 +1,170 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
 import { useTransactions } from '@/hooks/useTransactions';
 import TransactionFormModal from '@/components/TransactionFormModal';
-import { formatMoney, formatDate } from '@/lib/format';
-import type { ReceiptSplit } from '@/lib/types';
+import type { Transaction } from '@/lib/types';
+import {
+  fmt,
+  Badge,
+  SplitMini,
+  SkeletonTable,
+  EmptyState,
+  Toast,
+  Plus,
+  ArrowRightLeft,
+} from '@/components/ui';
 
 type Tab = 'all' | 'sale' | 'purchase';
 
-const tabs: { key: Tab; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'purchase', label: 'Purchases' },
-  { key: 'sale', label: 'Sales' },
-];
+const initial = (name: string) => name.trim().charAt(0).toUpperCase() || '#';
 
-function receiptSummary(splits: ReceiptSplit[]) {
-  const withReceipt = splits
+function fmtDate(iso: string) {
+  const d = new Date(iso);
+  return {
+    date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
+function receiptOk(t: Transaction) {
+  return t.receipt_splits
     .filter((s) => s.has_receipt)
     .reduce((sum, s) => sum + s.quantity, 0);
-  const withoutReceipt = splits
-    .filter((s) => !s.has_receipt)
-    .reduce((sum, s) => sum + s.quantity, 0);
-  return `${withReceipt} ✅ ${withoutReceipt} ❌`;
 }
 
 export default function TransactionsPage() {
   const [tab, setTab] = useState<Tab>('all');
-  const [modalOpen, setModalOpen] = useState(false);
+  const [modal, setModal] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const { data, isLoading, isError } = useTransactions(
-    tab === 'all' ? undefined : tab
-  );
+  const { data: all = [], isLoading } = useTransactions();
+
+  const counts = {
+    all: all.length,
+    sale: all.filter((t) => t.transaction_type === 'sale').length,
+    purchase: all.filter((t) => t.transaction_type === 'purchase').length,
+  };
+  const rows = all.filter((t) => tab === 'all' || t.transaction_type === tab);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2200);
+  };
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex overflow-hidden rounded-lg border border-gray-200 bg-white">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                tab === t.key
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+    <div className="content__inner">
+      <div className="pagehead">
+        <div className="pills">
+          <button
+            className={'pill' + (tab === 'all' ? ' pill--active' : '')}
+            onClick={() => setTab('all')}
+          >
+            All <span className="pill__count">{counts.all}</span>
+          </button>
+          <button
+            className={'pill' + (tab === 'purchase' ? ' pill--active' : '')}
+            onClick={() => setTab('purchase')}
+          >
+            Purchases <span className="pill__count">{counts.purchase}</span>
+          </button>
+          <button
+            className={'pill' + (tab === 'sale' ? ' pill--active' : '')}
+            onClick={() => setTab('sale')}
+          >
+            Sales <span className="pill__count">{counts.sale}</span>
+          </button>
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
+        <button className="btn btn--primary" onClick={() => setModal(true)}>
           <Plus size={18} />
           Record Transaction
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+      <div className="card">
+        <div className="card__head">
+          <div>
+            <div className="card__title">
+              {tab === 'all' ? 'All Transactions' : tab === 'sale' ? 'Sales' : 'Purchases'}
+            </div>
+            <div className="card__sub">
+              {isLoading ? 'Loading…' : `${rows.length} records · receipt compliance tracked`}
+            </div>
+          </div>
+        </div>
+
         {isLoading ? (
-          <div className="p-6 text-sm text-gray-500">Loading transactions...</div>
-        ) : isError ? (
-          <div className="p-6 text-sm text-red-600">Failed to load transactions.</div>
-        ) : !data || data.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">No transactions found.</div>
+          <SkeletonTable rows={8} cols={7} />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon={<ArrowRightLeft size={32} />}
+            title="No transactions yet"
+            msg="Record your first sale or purchase to start tracking your books."
+            action={
+              <button className="btn btn--primary" onClick={() => setModal(true)}>
+                <Plus size={18} />
+                Record Transaction
+              </button>
+            }
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-gray-500">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Product</th>
-                  <th className="px-4 py-3 font-medium">Type</th>
-                  <th className="px-4 py-3 font-medium">Quantity</th>
-                  <th className="px-4 py-3 font-medium">Unit Price</th>
-                  <th className="px-4 py-3 font-medium">Discount</th>
-                  <th className="px-4 py-3 font-medium">Receipts</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((t) => (
-                  <tr key={t.id} className="border-t border-gray-50 hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-600">{formatDate(t.created_at)}</td>
-                    <td className="px-4 py-3 font-medium text-gray-900">{t.product.name}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${
-                          t.transaction_type === 'sale'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}
-                      >
-                        {t.transaction_type}
-                      </span>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Product</th>
+                <th>Type</th>
+                <th className="num">Qty</th>
+                <th className="num">Unit Price</th>
+                <th className="num">Discount</th>
+                <th>Receipt Splits</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((t) => {
+                const { date, time } = fmtDate(t.created_at);
+                const disc = Number(t.discount_amount);
+                return (
+                  <tr key={t.id}>
+                    <td>
+                      <div className="cell-strong">{date}</div>
+                      <div className="cellsub">
+                        {time} · {t.id.slice(0, 8)}
+                      </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{t.total_quantity}</td>
-                    <td className="px-4 py-3 text-gray-600">{formatMoney(t.unit_price)}</td>
-                    <td className="px-4 py-3 text-gray-600">{formatMoney(t.discount_amount)}</td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {receiptSummary(t.receipt_splits)}
+                    <td>
+                      <div className="prod-cell">
+                        <span className="prod-thumb">{initial(t.product.name)}</span>
+                        <div className="cell-strong">{t.product.name}</div>
+                      </div>
+                    </td>
+                    <td>
+                      {t.transaction_type === 'sale' ? (
+                        <Badge tone="green" dot>
+                          Sale
+                        </Badge>
+                      ) : (
+                        <Badge tone="blue" dot>
+                          Purchase
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="num tnum cell-strong">{t.total_quantity}</td>
+                    <td className="num tnum">{fmt(t.unit_price)}</td>
+                    <td className="num tnum cell-muted">{disc ? '−' + fmt(disc) : '—'}</td>
+                    <td>
+                      <SplitMini ok={receiptOk(t)} total={t.total_quantity} />
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
         )}
       </div>
 
-      {modalOpen && <TransactionFormModal onClose={() => setModalOpen(false)} />}
+      <TransactionFormModal open={modal} onClose={() => setModal(false)} onSaved={showToast} />
+      {toast && <Toast>{toast}</Toast>}
     </div>
   );
 }

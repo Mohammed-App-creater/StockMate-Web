@@ -5,14 +5,23 @@ import { usePathname, useRouter } from 'next/navigation';
 import { getToken } from '@/lib/auth';
 import { useAuthStore } from '@/store/auth';
 import Sidebar from '@/components/Sidebar';
-import Header from '@/components/Header';
+import Topbar, { TopbarSearch } from '@/components/Header';
 
-const titles: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/products': 'Products',
-  '/transactions': 'Transactions',
-  '/summary': 'Summary',
-};
+function meta(pathname: string): { title: string; sub: string } {
+  if (pathname.startsWith('/products'))
+    return { title: 'Products', sub: 'Manage your inventory items' };
+  if (pathname.startsWith('/transactions'))
+    return { title: 'Transactions', sub: 'Sales, purchases & receipt compliance' };
+  if (pathname.startsWith('/summary'))
+    return { title: 'Summary', sub: 'Financial performance & analytics' };
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  return { title: 'Dashboard', sub: `${today} · Daily overview` };
+}
 
 export default function DashboardLayout({
   children,
@@ -23,6 +32,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const hydrate = useAuthStore((s) => s.hydrate);
   const [ready, setReady] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     const token = getToken();
@@ -34,20 +44,22 @@ export default function DashboardLayout({
     setReady(true);
   }, [router, hydrate]);
 
-  if (!ready) {
-    return null;
-  }
+  if (!ready) return null;
 
-  const title =
-    titles[Object.keys(titles).find((k) => pathname.startsWith(k)) ?? ''] ??
-    'StockMate';
+  const { title, sub } = meta(pathname);
+  const isDashboard = pathname === '/dashboard' || pathname.startsWith('/dashboard/');
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header title={title} />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+    <div className="app">
+      <Sidebar collapsed={collapsed} />
+      <div className="app__main">
+        <Topbar
+          title={title}
+          sub={sub}
+          onToggle={() => setCollapsed((c) => !c)}
+          actions={isDashboard ? <TopbarSearch /> : null}
+        />
+        <main className="content">{children}</main>
       </div>
     </div>
   );

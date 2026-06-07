@@ -1,279 +1,322 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Trash2, Search } from 'lucide-react';
-import Modal from './Modal';
-import { useSearchProducts } from '@/hooks/useProducts';
-import { useDebounce } from '@/hooks/useDebounce';
+import { useEffect, useRef, useState } from 'react';
+import { useProducts } from '@/hooks/useProducts';
 import {
   useCreateTransaction,
-  type ReceiptSplitInput,
   type TransactionInput,
 } from '@/hooks/useTransactions';
-import type { Product } from '@/lib/types';
+import {
+  fmt,
+  Field,
+  X,
+  Search,
+  Plus,
+  Trash2,
+  Check,
+  Receipt,
+  ArrowUpRight,
+  ArrowDownRight,
+} from '@/components/ui';
 
-interface TransactionFormModalProps {
+interface RecordModalProps {
+  open: boolean;
   onClose: () => void;
+  onSaved: (message: string) => void;
 }
 
-export default function TransactionFormModal({ onClose }: TransactionFormModalProps) {
+interface SplitRow {
+  id: number;
+  who: string;
+  qty: string;
+}
+
+export default function TransactionFormModal({ open, onClose, onSaved }: RecordModalProps) {
+  const { data: products = [] } = useProducts();
   const createTransaction = useCreateTransaction();
 
-  const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounce(search, 300);
-  const { data: results } = useSearchProducts(debouncedSearch);
-  const [showDropdown, setShowDropdown] = useState(false);
-
-  const [selected, setSelected] = useState<Product | null>(null);
-  const [type, setType] = useState<'purchase' | 'sale'>('sale');
-  const [totalQuantity, setTotalQuantity] = useState(0);
-  const [unitPrice, setUnitPrice] = useState('');
+  const [type, setType] = useState<'sale' | 'purchase'>('sale');
+  const [pid, setPid] = useState<string>('');
+  const [qty, setQty] = useState('');
+  const [price, setPrice] = useState('');
   const [discount, setDiscount] = useState('0');
   const [notes, setNotes] = useState('');
-  const [splits, setSplits] = useState<ReceiptSplitInput[]>([
-    { quantity: 0, has_receipt: true },
-  ]);
+  const [splits, setSplits] = useState<SplitRow[]>([{ id: 1, who: '', qty: '' }]);
   const [error, setError] = useState<string | null>(null);
+  const nextId = useRef(2);
 
-  const assigned = splits.reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
-  const splitsMatch = assigned === totalQuantity && totalQuantity > 0;
-
-  const updateSplit = (index: number, patch: Partial<ReceiptSplitInput>) =>
-    setSplits((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
-
-  const addSplit = () =>
-    setSplits((prev) => [...prev, { quantity: 0, has_receipt: true }]);
-
-  const removeSplit = (index: number) =>
-    setSplits((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
-
-  const pickProduct = (p: Product) => {
-    setSelected(p);
-    setSearch(p.name);
-    setShowDropdown(false);
-    if (!unitPrice) {
-      setUnitPrice(type === 'sale' ? p.selling_price : p.buying_price);
+  // reset each time the modal opens
+  useEffect(() => {
+    if (open) {
+      setType('sale');
+      setPid('');
+      setQty('');
+      setPrice('');
+      setDiscount('0');
+      setNotes('');
+      setSplits([{ id: 1, who: '', qty: '' }]);
+      setError(null);
+      nextId.current = 2;
     }
+  }, [open]);
+
+  const selected = products.find((p) => p.id === pid);
+
+  // autofill unit price from the product + transaction type
+  useEffect(() => {
+    if (selected) {
+      setPrice(type === 'sale' ? selected.selling_price : selected.buying_price);
+    }
+  }, [pid, type, selected]);
+
+  const qtyN = Number(qty) || 0;
+  const assigned = splits.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+  const complete = assigned === qtyN && qtyN > 0 && !!pid;
+  const total = qtyN * (Number(price) || 0) - (Number(discount) || 0);
+
+  const addRow = () => {
+    setSplits((prev) => [...prev, { id: nextId.current++, who: '', qty: '' }]);
   };
+  const setRow = (id: number, k: 'who' | 'qty', v: string) =>
+    setSplits((prev) => prev.map((r) => (r.id === id ? { ...r, [k]: v } : r)));
+  const delRow = (id: number) =>
+    setSplits((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : prev));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const save = async () => {
     setError(null);
-    if (!selected) {
-      setError('Please select a product.');
-      return;
-    }
-    if (!splitsMatch) {
-      setError('Receipt splits must sum to the total quantity.');
-      return;
-    }
+    if (!complete) return;
     const payload: TransactionInput = {
-      product_id: selected.id,
+      product_id: pid,
       transaction_type: type,
-      total_quantity: totalQuantity,
-      unit_price: unitPrice,
+      total_quantity: qtyN,
+      unit_price: price,
       discount_amount: discount || '0',
       notes: notes ? notes : null,
-      receipt_splits: splits.map((s) => ({
-        quantity: Number(s.quantity),
-        has_receipt: s.has_receipt,
-      })),
+      // a split with a named recipient counts as having a receipt;
+      // a blank recipient is recorded as an un-receipted split.
+      receipt_splits: splits
+        .map((r) => ({ quantity: Number(r.qty) || 0, has_receipt: r.who.trim().length > 0 }))
+        .filter((r) => r.quantity > 0),
     };
     try {
       await createTransaction.mutateAsync(payload);
       onClose();
+      onSaved('Transaction recorded');
     } catch {
       setError('Failed to record transaction. Please try again.');
     }
   };
 
-  const inputClass =
-    'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
-  const labelClass = 'mb-1 block text-sm font-medium text-gray-700';
-
   return (
-    <Modal title="Record Transaction" onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Product search */}
-        <div className="relative">
-          <label className={labelClass}>Product</label>
-          <div className="relative">
-            <Search
-              size={16}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-            <input
-              className={`${inputClass} pl-9`}
-              placeholder="Search products..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setSelected(null);
-                setShowDropdown(true);
-              }}
-              onFocus={() => setShowDropdown(true)}
-            />
+    <>
+      <div
+        className={'overlay' + (open ? ' overlay--in' : '')}
+        style={{ display: open ? 'block' : 'none' }}
+        onClick={onClose}
+      />
+      <div
+        className={'modal' + (open ? ' modal--in' : '')}
+        style={{ display: open ? 'flex' : 'none', width: 680 }}
+      >
+        <div className="modal__head">
+          <div>
+            <div className="drawer__title">Record Transaction</div>
+            <div className="drawer__sub">Log a sale or purchase and assign receipts</div>
           </div>
-          {showDropdown && debouncedSearch && results && results.length > 0 && (
-            <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-              {results.map((p) => (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    onClick={() => pickProduct(p)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50"
-                  >
-                    <span>{p.name}</span>
-                    <span className="text-xs text-gray-400">
-                      stock: {p.current_stock}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <button className="iconbtn iconbtn--ghost" onClick={onClose}>
+            <X size={18} />
+          </button>
         </div>
 
-        {/* Type toggle */}
-        <div>
-          <label className={labelClass}>Type</label>
-          <div className="flex overflow-hidden rounded-lg border border-gray-300">
-            {(['purchase', 'sale'] as const).map((t) => (
+        <div className="modal__body">
+          <Field label="Transaction Type">
+            <div className="bigtoggle">
               <button
-                key={t}
-                type="button"
-                onClick={() => setType(t)}
-                className={`flex-1 px-4 py-2 text-sm font-medium capitalize transition-colors ${
-                  type === t ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'
-                }`}
+                className={'bigtoggle__opt bigtoggle__opt--sale' + (type === 'sale' ? ' is-on' : '')}
+                onClick={() => setType('sale')}
               >
-                {t}
+                <span className="bigtoggle__ico t-green">
+                  <ArrowUpRight size={19} />
+                </span>
+                <span>
+                  <b>Sale</b>
+                  <span>Selling to a customer</span>
+                </span>
               </button>
-            ))}
-          </div>
-        </div>
+              <button
+                className={'bigtoggle__opt bigtoggle__opt--buy' + (type === 'purchase' ? ' is-on' : '')}
+                onClick={() => setType('purchase')}
+              >
+                <span className="bigtoggle__ico t-blue">
+                  <ArrowDownRight size={19} />
+                </span>
+                <span>
+                  <b>Purchase</b>
+                  <span>Buying new stock</span>
+                </span>
+              </button>
+            </div>
+          </Field>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className={labelClass}>Quantity</label>
-            <input
-              type="number"
-              className={inputClass}
-              value={totalQuantity}
-              onChange={(e) => setTotalQuantity(Number(e.target.value))}
-              required
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Unit Price</label>
-            <input
-              type="number"
-              step="0.01"
-              className={inputClass}
-              value={unitPrice}
-              onChange={(e) => setUnitPrice(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Discount</label>
-            <input
-              type="number"
-              step="0.01"
-              className={inputClass}
-              value={discount}
-              onChange={(e) => setDiscount(e.target.value)}
-            />
-          </div>
-        </div>
+          <Field label="Product">
+            <div className="input-wrap">
+              <span className="input-wrap__ico">
+                <Search size={17} />
+              </span>
+              <select
+                className="select input--icon"
+                value={pid}
+                onChange={(e) => setPid(e.target.value)}
+                style={{ appearance: 'auto' }}
+              >
+                <option value="" disabled>
+                  Select a product…
+                </option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} — {p.category}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </Field>
 
-        <div>
-          <label className={labelClass}>Notes</label>
-          <textarea
-            className={inputClass}
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
-
-        {/* Receipt splits */}
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Receipt Splits</label>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                splitsMatch
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              {assigned} of {totalQuantity} assigned
-            </span>
-          </div>
-          <div className="space-y-2">
-            {splits.map((split, i) => (
-              <div key={i} className="flex items-center gap-3">
+          <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <Field label="Quantity">
+              <input
+                className="input tnum"
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                inputMode="numeric"
+                placeholder="0"
+              />
+            </Field>
+            <Field label="Unit Price">
+              <div className="input-wrap">
                 <input
-                  type="number"
-                  className={`${inputClass} flex-1`}
-                  placeholder="Quantity"
-                  value={split.quantity}
-                  onChange={(e) =>
-                    updateSplit(i, { quantity: Number(e.target.value) })
-                  }
+                  className="input tnum"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="0"
                 />
-                <label className="flex items-center gap-2 whitespace-nowrap text-sm text-gray-600">
+                <span className="input-affix">ETB</span>
+              </div>
+            </Field>
+            <Field label="Discount">
+              <div className="input-wrap">
+                <input
+                  className="input tnum"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  inputMode="numeric"
+                />
+                <span className="input-affix">ETB</span>
+              </div>
+            </Field>
+          </div>
+
+          <Field label="Notes" hint="Optional — reference, buyer, or memo">
+            <textarea
+              className="textarea"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Monthly restock for Bole branch…"
+            />
+          </Field>
+
+          {/* receipt splits */}
+          <div
+            style={{
+              marginTop: 6,
+              padding: 16,
+              background: '#FCFDFE',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+            }}
+          >
+            <div className="row between" style={{ marginBottom: 13 }}>
+              <div className="row" style={{ gap: 9 }}>
+                <span className="stat__ico t-amber" style={{ width: 32, height: 32 }}>
+                  <Receipt size={17} />
+                </span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>Receipt Splits</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    Assign each unit to a receipt for compliance
+                  </div>
+                </div>
+              </div>
+              <span className={'split-total' + (complete ? ' is-complete' : '')}>
+                {complete ? <Check size={15} /> : <Receipt size={14} />}
+                {assigned} of {qtyN || 0} assigned
+              </span>
+            </div>
+
+            {splits.map((r) => (
+              <div className="splitrow" key={r.id}>
+                <input
+                  className="input"
+                  value={r.who}
+                  onChange={(e) => setRow(r.id, 'who', e.target.value)}
+                  placeholder="Receipt recipient / reference"
+                  style={{ height: 40 }}
+                />
+                <div className="input-wrap">
                   <input
-                    type="checkbox"
-                    checked={split.has_receipt}
-                    onChange={(e) =>
-                      updateSplit(i, { has_receipt: e.target.checked })
-                    }
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="input tnum"
+                    value={r.qty}
+                    onChange={(e) => setRow(r.id, 'qty', e.target.value)}
+                    placeholder="Qty"
+                    inputMode="numeric"
+                    style={{ height: 40 }}
                   />
-                  Has receipt
-                </label>
+                </div>
                 <button
-                  type="button"
-                  onClick={() => removeSplit(i)}
-                  className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                  aria-label="Remove split"
+                  className="iconbtn"
+                  style={{ width: 40, height: 40, color: 'var(--danger)' }}
+                  onClick={() => delRow(r.id)}
+                  title="Remove"
                 >
                   <Trash2 size={16} />
                 </button>
               </div>
             ))}
+
+            <button className="btn btn--ghost btn--sm" style={{ marginTop: 4 }} onClick={addRow}>
+              <Plus size={16} />
+              Add receipt split
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={addSplit}
-            className="mt-2 flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
-          >
-            <Plus size={16} />
-            Add Split
-          </button>
+
+          {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{error}</p>}
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        <div className="flex justify-end gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={!splitsMatch || !selected || createTransaction.isPending}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {createTransaction.isPending ? 'Saving...' : 'Record'}
-          </button>
+        <div className="modal__foot">
+          <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+            Total&nbsp;
+            <b className="tnum" style={{ color: 'var(--text)', fontSize: 15 }}>
+              {fmt(total > 0 ? total : 0)} ETB
+            </b>
+          </div>
+          <div className="row" style={{ gap: 10 }}>
+            <button className="btn btn--ghost" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="btn btn--primary"
+              onClick={save}
+              disabled={!complete || createTransaction.isPending}
+              style={{ opacity: complete && !createTransaction.isPending ? 1 : 0.55 }}
+            >
+              <Check size={17} />
+              {createTransaction.isPending
+                ? 'Saving…'
+                : `Record ${type === 'sale' ? 'Sale' : 'Purchase'}`}
+            </button>
+          </div>
         </div>
-      </form>
-    </Modal>
+      </div>
+    </>
   );
 }
