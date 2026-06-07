@@ -2,7 +2,7 @@ import axios from 'axios';
 import { getToken, removeToken } from './auth';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
+  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'https://stockmate-server-6lvd.onrender.com',
   headers: { 'Content-Type': 'application/json' },
 });
 
