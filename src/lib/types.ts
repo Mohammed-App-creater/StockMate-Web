@@ -6,6 +6,42 @@ export interface User {
   created_at: string;
 }
 
+/** Alias matching the API docs — UserResponse has the same shape as User. */
+export type UserResponse = User;
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: 'bearer';
+}
+
+export interface RegisterRequest {
+  username: string;
+  full_name: string;
+  password: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface UpdateUserRequest {
+  full_name?: string;
+  username?: string;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+/** Most errors: { detail: string }. 422 validation: { detail: [...] }. */
+export interface ApiError {
+  detail:
+    | string
+    | Array<{ loc: (string | number)[]; msg: string; type: string }>;
+}
+
 export interface Product {
   id: string;
   name: string;

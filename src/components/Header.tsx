@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
+import { useAuthStore } from '@/store/auth';
 import { Menu, Bell, Search } from '@/components/ui';
 
 interface TopbarProps {
@@ -10,7 +12,17 @@ interface TopbarProps {
   actions?: React.ReactNode;
 }
 
+function initials(fullName?: string, username?: string): string {
+  const source = (fullName || username || '').trim();
+  if (!source) return '–';
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return source.slice(0, 2).toUpperCase();
+}
+
 export default function Topbar({ title, sub, onToggle, actions }: TopbarProps) {
+  const user = useAuthStore((s) => s.user);
+
   return (
     <header className="topbar">
       <button className="iconbtn iconbtn--ghost" onClick={onToggle} title="Toggle sidebar">
@@ -25,13 +37,22 @@ export default function Topbar({ title, sub, onToggle, actions }: TopbarProps) {
         <button className="iconbtn bell-dot" title="Notifications">
           <Bell size={19} />
         </button>
-        <div className="row" style={{ gap: 10, paddingLeft: 6 }}>
-          <div className="avatar">AT</div>
+        <Link
+          href="/settings"
+          className="row"
+          style={{ gap: 10, paddingLeft: 6 }}
+          title="Account settings"
+        >
+          <div className="avatar">{initials(user?.full_name, user?.username)}</div>
           <div style={{ lineHeight: 1.25 }} className="hide-sm">
-            <div style={{ fontSize: 13.5, fontWeight: 600 }}>Abenezer T.</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Senior Accountant</div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>
+              {user?.full_name ?? 'Loading…'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+              {user ? `@${user.username}` : 'Account'}
+            </div>
           </div>
-        </div>
+        </Link>
       </div>
     </header>
   );
