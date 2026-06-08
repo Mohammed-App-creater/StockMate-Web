@@ -452,7 +452,6 @@ a { color: inherit; text-decoration: none; }
 .content::-webkit-scrollbar-thumb, .drawer__body::-webkit-scrollbar-thumb, .modal__body::-webkit-scrollbar-thumb { background: #DCE3EC; border-radius: 10px; border: 3px solid var(--bg); }
 .content::-webkit-scrollbar-thumb:hover { background: #C7D0DB; }
 
-.hide-sm { display: flex; }
 @media (max-width: 720px) { .hide-sm { display: none !important; } }
 
 @media (max-width: 1080px) {
